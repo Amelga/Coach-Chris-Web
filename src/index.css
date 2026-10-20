@@ -1,0 +1,85 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+  
+  --color-brand-lime: var(--accent-lime);
+  --color-brand-red: var(--accent-red);
+  --color-brand-navy: var(--bg-primary);
+  --color-brand-card: var(--bg-card);
+}
+
+@layer base {
+  :root {
+    --bg-primary: #0a0f1a;
+    --bg-card: #121826;
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.6);
+    --border-color: rgba(255, 255, 255, 0.1);
+    --accent-lime: #00ff66; /* Deep Fluorescent Green */
+    --accent-red: #ff2d2d;
+    --glass-bg: rgba(18, 24, 38, 0.8);
+  }
+
+  :root.dark {
+    --bg-primary: #0a0f1a;
+    --bg-card: #121826;
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.6);
+    --border-color: rgba(255, 255, 255, 0.1);
+    --accent-lime: #00ff66;
+    --accent-red: #ff2d2d;
+    --glass-bg: rgba(18, 24, 38, 0.8);
+  }
+
+  :root:not(.dark) {
+    --bg-primary: #f1f5f9;
+    --bg-card: #ffffff;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --border-color: #e2e8f0;
+    --accent-lime: #00cc52; /* Refined for Light Mode contrast */
+    --accent-red: #e11d48;
+    --glass-bg: rgba(255, 255, 255, 0.8);
+  }
+
+  body {
+    @apply bg-brand-navy text-[var(--text-primary)] font-sans antialiased transition-colors duration-300;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display uppercase tracking-tight text-[var(--text-primary)];
+  }
+}
+
+.glass-card {
+  @apply bg-brand-card border border-[var(--border-color)] rounded-2xl overflow-hidden shadow-sm backdrop-blur-md;
+}
+
+.btn-primary {
+  @apply bg-[var(--accent-lime)] text-black font-bold px-8 py-4 rounded-full hover:scale-105 transition-transform duration-200 flex items-center gap-2 uppercase tracking-wider text-sm shadow-lg shadow-brand-lime/20;
+}
+
+.btn-secondary {
+  @apply border border-[var(--border-color)] text-[var(--text-primary)] font-bold px-8 py-4 rounded-full hover:bg-white/5 transition-all duration-200 flex items-center gap-2 uppercase tracking-wider text-sm;
+}
+
+.text-white\/60 {
+  color: var(--text-secondary);
+}
+
+.text-white\/40 {
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.text-white\/70 {
+  color: var(--text-secondary);
+  opacity: 1.1;
+}
+
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60;
+}
