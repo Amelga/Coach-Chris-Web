@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Menu, X, ChevronRight, ChevronDown, Trophy, Target, Users, BookOpen, 
   Calendar, Award, Activity, MessageSquare, Mail, Phone, 
-  Globe, Instagram, Twitter, Facebook, ArrowRight, CheckCircle2
+  Globe, Instagram, Twitter, Facebook, ArrowRight, CheckCircle2, Loader2
 } from 'lucide-react';
 
 // Pages
@@ -23,6 +23,8 @@ import Onboarding from './pages/Onboarding';
 import ClientDashboard from './pages/dashboards/ClientDashboard';
 import CoachDashboard from './pages/dashboards/CoachDashboard';
 import { ChatWidget } from './components/ChatWidget';
+// Split-screen sign-up landing page (feature-signup-landing) — lazy so it stays out of the main bundle.
+const Join = lazy(() => import('./pages/Join'));
 import { SettingsProvider, useSettings } from './context/SettingsContext';
 import { UserProvider, useUser } from './context/UserContext';
 import { Navigate } from 'react-router-dom';
@@ -314,33 +316,53 @@ const DashboardRedirect = () => {
   return <ClientDashboard />;
 };
 
+const SiteLayout = () => {
+  const location = useLocation();
+  // /join is a standalone full-viewport split screen: no navbar, footer or chat overlay.
+  const isStandalone = location.pathname === '/join';
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      {!isStandalone && <Navbar />}
+      <main className="flex-grow">
+        <Suspense
+          fallback={
+            <div role="status" className="min-h-[60vh] flex items-center justify-center">
+              <Loader2 className="animate-spin text-brand-lime" size={32} aria-hidden="true" />
+              <span className="sr-only">Loading…</span>
+            </div>
+          }
+        >
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/philosophy" element={<Philosophy />} />
+            <Route path="/pathway" element={<DevelopmentModel />} />
+            <Route path="/curriculum" element={<Curriculum />} />
+            <Route path="/focus" element={<TrainingFocus />} />
+            <Route path="/programs" element={<Programs />} />
+            <Route path="/drills" element={<Drills />} />
+            <Route path="/testimonials" element={<Testimonials />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="/dashboard" element={<DashboardRedirect />} />
+            <Route path="/join" element={<Join />} />
+          </Routes>
+        </Suspense>
+      </main>
+      {!isStandalone && <Footer />}
+      {!isStandalone && <ChatWidget />}
+    </div>
+  );
+};
+
 export default function App() {
   return (
     <UserProvider>
       <SettingsProvider>
         <Router>
-          <div className="min-h-screen flex flex-col">
-            <Navbar />
-            <main className="flex-grow">
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/about" element={<About />} />
-                <Route path="/philosophy" element={<Philosophy />} />
-                <Route path="/pathway" element={<DevelopmentModel />} />
-                <Route path="/curriculum" element={<Curriculum />} />
-                <Route path="/focus" element={<TrainingFocus />} />
-                <Route path="/programs" element={<Programs />} />
-                <Route path="/drills" element={<Drills />} />
-                <Route path="/testimonials" element={<Testimonials />} />
-                <Route path="/contact" element={<Contact />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/onboarding" element={<Onboarding />} />
-                <Route path="/dashboard" element={<DashboardRedirect />} />
-              </Routes>
-            </main>
-            <Footer />
-            <ChatWidget />
-          </div>
+          <SiteLayout />
         </Router>
       </SettingsProvider>
     </UserProvider>
