@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MessageSquare, X, Send, User, Bot, Loader2 } from 'lucide-react';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, limit } from 'firebase/firestore';
+import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { useUser } from '../context/UserContext';
 import { useLocation } from 'react-router-dom';
 
@@ -33,25 +34,51 @@ export const ChatWidget = () => {
   });
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [uid, setUid] = useState<string | null>(null);
+
+  // Firestore rules scope /chats to the message owner, so every visitor needs an
+  // identity — including guests. Signed-in users already have one; guests get an
+  // anonymous account. Listen first so an existing session does not trigger a
+  // redundant sign-in.
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUid(currentUser.uid);
+      } else {
+        signInAnonymously(auth).catch((err) => {
+          console.error('Anonymous sign-in failed:', err);
+          setUid(null);
+        });
+      }
+    });
+    return () => unsubAuth();
+  }, []);
 
   // Firebase Real-time Sync
   useEffect(() => {
+    if (!uid) return;
+
     const q = query(
       collection(db, 'chats', sessionId, 'messages'),
       orderBy('timestamp', 'asc'),
       limit(50)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Message[];
-      setMessages(msgs);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const msgs = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Message[];
+        setMessages(msgs);
+      },
+      // Rules intentionally deny reading sessions that belong to someone else.
+      (err) => console.error('Chat sync error:', err)
+    );
 
     return () => unsubscribe();
-  }, [sessionId]);
+  }, [sessionId, uid]);
 
   // Auto-scroll
   useEffect(() => {
@@ -62,11 +89,15 @@ export const ChatWidget = () => {
 
   const saveMessage = async (text: string, sender: 'user' | 'ai') => {
     try {
+      // uid is persisted so the rules can verify the writer owns the session.
+      const authorId = auth.currentUser?.uid || uid;
+      if (!authorId) return;
       await addDoc(collection(db, 'chats', sessionId, 'messages'), {
         text,
         sender,
         timestamp: serverTimestamp(),
-        sessionId
+        sessionId,
+        uid: authorId
       });
     } catch (err) {
       console.error("Error saving message:", err);

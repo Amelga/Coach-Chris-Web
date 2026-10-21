@@ -1,30 +1,82 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper functions
+
+    // ---- Helpers -----------------------------------------------------------
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isAdmin() {
-      return isAuthenticated() && 
+      return isAuthenticated() &&
         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
          request.auth.token.email == "firstcupdmcc@gmail.com");
     }
 
-    // Chat rules
+    // The writer must own the record. Only fields the client is allowed to
+    // control are inspected, so this holds on create, update and delete.
+    function signedAsOwner() {
+      return isAuthenticated() && request.resource.data.uid == request.auth.uid;
+    }
+
+    // The stored record's owner (used for reads and deletes, where
+    // request.resource is not available).
+    function ownedByCaller() {
+      return isAuthenticated() && resource.data.uid == request.auth.uid;
+    }
+
+    // ---- Chat --------------------------------------------------------------
+    // Session ids are generated in the browser (crypto-random) and are only
+    // known to the visitor who created them. Sessions are therefore readable
+    // and writable by their owner only; there is no public read path.
     match /chats/{sessionId} {
-      allow read, write: if true; // For the prototype, allow session-based access
-      
+      // Session containers are created implicitly by their first message.
+      allow create, update: if isAuthenticated();
+      allow read, delete: if false;
+
       match /messages/{messageId} {
-        allow read, write: if true; // In a real app, we'd scope this to the session owner
+        // Reads are scoped to the session owner. A message whose uid does not
+        // belong to the caller is invisible, and querying a session that has
+        // no messages of your own returns nothing.
+        allow read: if isAuthenticated() && resource.data.uid == request.auth.uid;
+
+        // Creates are fully validated: no unexpected keys, bounded sizes,
+        // known senders, and the writer must own the record.
+        allow create: if signedAsOwner()
+          && request.resource.data.keys().hasOnly(['text', 'sender', 'timestamp', 'sessionId', 'uid'])
+          && request.resource.data.keys().hasAll(['text', 'sender', 'timestamp', 'sessionId', 'uid'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 4000
+          && request.resource.data.sender is string
+          && request.resource.data.sender in ['user', 'ai', 'coach']
+          && request.resource.data.sessionId is string
+          && request.resource.data.sessionId == sessionId
+          && request.resource.data.timestamp == request.time;
+
+        // Edits must keep the same owner and stay within the validated shape.
+        // Deletes are owner-only.
+        allow update: if signedAsOwner()
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'sender'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 4000;
+
+        allow delete: if ownedByCaller();
       }
     }
-    
-    // User profile rules
+
+    // ---- User profiles -----------------------------------------------------
     match /users/{userId} {
       allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
       allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // ---- Default deny ------------------------------------------------------
+    // Any collection not matched above is rejected for every caller.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
