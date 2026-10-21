@@ -9,7 +9,9 @@ const firebaseConfig = {
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || 'ai-studio-0accf1fc-bae8-4012-882e-9ea90d54d105'
+  // Firestore database ID. '(default)' is the database every new project gets;
+  // set VITE_FIREBASE_FIRESTORE_DATABASE_ID only for a named (non-default) database.
+  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || '(default)'
 };
 
 const app = initializeApp(firebaseConfig);
