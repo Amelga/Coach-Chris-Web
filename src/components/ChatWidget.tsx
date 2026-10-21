@@ -1,14 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MessageSquare, X, Send, User, Bot, Loader2 } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
 import { db } from '../lib/firebase';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, limit } from 'firebase/firestore';
 import { useUser } from '../context/UserContext';
 import { useLocation } from 'react-router-dom';
 
-// Initialize Gemini
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+// The Gemini key lives only on the server; the widget talks to /api/chat.
+const AI_UNAVAILABLE_MESSAGE = "I'm having a bit of trouble connecting to my brain. Coach Chris has been notified!";
 
 interface Message {
   id?: string;
@@ -75,43 +74,15 @@ export const ChatWidget = () => {
   };
 
   const getSystemInstruction = () => {
+    // The system prompt now lives server-side in api/chat.ts. Kept as the first
+    // user message so the assistant still receives the per-request context the
+    // widget already had, while the model instruction itself stays private.
     const userRole = profile?.role || 'guest';
     const userName = profile?.displayName || 'Guest';
     const currentPage = location.pathname;
     const onboarded = profile?.onboarded ? 'Yes' : 'No';
 
-    return `You are the Coachly Ecosystem Assistant, a premium AI guide for Coach Chris's football academy.
-    
-    CURRENT CONTEXT:
-    - User: ${userName}
-    - Role: ${userRole}
-    - Current Page: ${currentPage}
-    - Onboarded: ${onboarded}
-    
-    ECOSYSTEM KNOWLEDGE:
-    1. PROGRAMS & PRICING:
-       - Individual Assessment: Free/HR. Focus on 1-on-1 technical mastery and competency report.
-       - Development Package: 2400 AED (8 sessions). Includes stage-aligned curriculum, matrix tracking, and parent consultation.
-       - Team / Group Training: 800 AED/person (8 sessions). Focus on tactical dynamics and small-sided games.
-    2. PATHWAY: 5-stage developmental model for ages 3-18.
-    3. DASHBOARDS:
-       - Clients (Players/Parents) have a dashboard at /dashboard to track sessions, reports, and achievements.
-       - Coaches have a dashboard at /dashboard to manage players and academy analytics.
-    4. ONBOARDING: New users go through /onboarding to set their age, experience, and goals.
-    5. NAVIGATION:
-       - /programs: View pricing and book.
-       - /pathway: Learn about the 5 stages.
-       - /curriculum: Details on technical/tactical focus.
-       - /contact: Direct booking and Telegram support.
-       - /settings: Change language (EN/AR/ES), currency (AED/USD/EUR), and theme.
-    
-    GUIDELINES:
-    - If GUEST: Encourage them to explore /programs or /pathway. Suggest signing up to start their Onboarding flow.
-    - If CLIENT: Help them navigate their dashboard or find specific drills/curriculum details.
-    - If COACH: Assist with academy management queries.
-    - Be professional, energetic, and concise. Use football metaphors where appropriate.
-    - If you don't know something, suggest they message Coach Chris directly via the /contact page (Telegram).
-    - Reference the current page (${currentPage}) to provide relevant help (e.g., if on /programs, explain the differences between packages).`;
+    return `[Context for this conversation] User: ${userName} | Role: ${userRole} | Current page: ${currentPage} | Onboarded: ${onboarded}`;
   };
 
   const handleSend = async () => {
@@ -123,22 +94,39 @@ export const ChatWidget = () => {
     // 1. Save locally to Firebase
     await saveMessage(text, 'user');
 
-    // 2. Get AI Response
+    // 2. Get AI Response from the server-side proxy (the key never reaches the browser)
     setIsTyping(true);
     try {
-      const result = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: text,
-        config: {
-          systemInstruction: getSystemInstruction()
-        }
+      // Rebuild conversation history from Firestore, plus the per-request context line.
+      const history = messages
+        .filter((msg) => msg.text && msg.text.trim().length > 0)
+        .map((msg) => ({
+          role: msg.sender === 'user' ? 'user' : 'assistant',
+          content: msg.text,
+        }));
+      const payloadMessages = [
+        { role: 'user', content: getSystemInstruction() },
+        ...history,
+        { role: 'user', content: text },
+      ].slice(-20);
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: payloadMessages }),
       });
-      
-      const aiResponse = result.text || "I'm sorry, I couldn't process that. Coach Chris will get back to you soon.";
+
+      if (!response.ok) {
+        await saveMessage(AI_UNAVAILABLE_MESSAGE, 'ai');
+        return;
+      }
+
+      const data = (await response.json()) as { reply?: string };
+      const aiResponse = data?.reply?.trim() || "I'm sorry, I couldn't process that. Coach Chris will get back to you soon.";
       await saveMessage(aiResponse, 'ai');
     } catch (err) {
       console.error("AI Error:", err);
-      await saveMessage("I'm having a bit of trouble connecting to my brain. Coach Chris has been notified!", 'ai');
+      await saveMessage(AI_UNAVAILABLE_MESSAGE, 'ai');
     } finally {
       setIsTyping(false);
     }
