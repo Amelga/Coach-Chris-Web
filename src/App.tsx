@@ -25,6 +25,8 @@ import CoachDashboard from './pages/dashboards/CoachDashboard';
 import { ChatWidget } from './components/ChatWidget';
 // Split-screen sign-up landing page (feature-signup-landing) — lazy so it stays out of the main bundle.
 const Join = lazy(() => import('./pages/Join'));
+// One-page landing page — lazy for the same reason.
+const Landing = lazy(() => import('./pages/Landing'));
 import { SettingsProvider, useSettings } from './context/SettingsContext';
 import { UserProvider, useUser } from './context/UserContext';
 import { Navigate } from 'react-router-dom';
@@ -348,6 +350,7 @@ const SiteLayout = () => {
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/dashboard" element={<DashboardRedirect />} />
             <Route path="/join" element={<Join />} />
+            <Route path="/welcome" element={<Landing />} />
           </Routes>
         </Suspense>
       </main>
